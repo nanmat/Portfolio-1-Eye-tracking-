@@ -1,14 +1,7 @@
----
-title: "Visual Search"
-author: "Nanna Kildahl Mathiasen, Esther Dyngby, Simon Hansen, Alberte Seeberg"
-date: "19/2/2018"
-output: html_document
----
-```{r cars}
-#PREPROCESSING
-pacman::p_load(readr,groupdata2,ggplot2,tidyverse,plyr,lmer, lmerTest, caret)
+pacman::p_load(readr,groupdata2,ggplot2,tidyverse,plyr,lmer)
+setwd('~/OneDrive/4 Semester/Computational models/2018 - Eye tracking')
 
-#Loading the files from the eyetracker
+#Loading the files
 log1=read_csv("PupilsLogs/logfile_1_2_f.csv")
 log2=read_csv("PupilsLogs/logfile_2_1_f.csv")
 log3=read_csv("PupilsLogs/logfile_3_2_f.csv")
@@ -93,27 +86,28 @@ write.csv(Samplesmerge, file = "Samplesmerge.csv")
 write.csv(Saccadesmerge, file = "Saccadesmerge.csv")
 
 Fixation=read.csv('Fixationsmerge.csv')
-Fixation = Fixation[,-1]
 Sample=read.csv('Samplesmerge.csv')
 Saccade=read.csv('Saccadesmerge.csv')
-```
 
+library(lmerTest)
+#Searchtype and Trial is crucial, search order can be left out, fixations can also be left out. 
+#Interaction because the two types of tasks vary and you can get better by practice in the star and not
+#really better in the counting. 
+model1 = glmer(Duration ~ SearchType * Trial + (1 + SearchType * Trial | ParticipantID), data = Fixation)
+summary(model1)
 
-```{r pressure, echo=FALSE}
+model2 = lmer(Duration ~ SearchType + Trial + (1 + SearchType + Trial | ParticipantID), data = Fixation)
+summary(model2)
 
-#Barplot 
-ggplot(subset(Fixation, Task == "VisualSearch"), aes(x=SearchType, y=Duration)) +
-  geom_bar(stat="summary",fun.y=mean, ) + geom_errorbar(stat="summary",fun.data=mean_se, width=0.2) + 
-  labs(y="Duration of fixations", x = "Task")
-      
+model3 = lmer(Duration ~ SearchType + (1 + Trial | ParticipantID), data = Fixation)
+summary(model3)
 
-```
+library(tidyverse)
+library(merTools)
+library(caret)
+library(Metrics)
+library(ggplot2)
 
-
-
-```{r pressure, echo=FALSE}
-#CROSS-VALIDATING 
-#Making a subset with only the data from the visualsearch tasks. 
 visualsearch = subset(Fixation, Task == "VisualSearch")
 visualsearch$ParticipantID = as.numeric(as.factor(as.character(visualsearch$ParticipantID)))
 folds = createFolds(unique(visualsearch$ParticipantID),3)
@@ -123,9 +117,9 @@ test_RMSE = NULL
 n = 1
 
 for (fold in folds) {
-  #train is everything but not fold, ! means all but not the following
+  #train2 is everything but not fold, in first loop fold 1, in second loop fold 2. ! means all but not the following
   train = subset(visualsearch, ! (ParticipantID %in% fold))
-  #test is every other fold than the fold in train
+  #test2 is every other fold than the fold in train2
   test = subset(visualsearch, (ParticipantID %in% fold))
   #The model we want to test
   train_model = lmer(Duration ~ SearchType * Trial + (1 + SearchType * Trial | ParticipantID), data = train, REML = FALSE)
@@ -140,13 +134,13 @@ for (fold in folds) {
 mean(test_RMSE)
 mean(train_RMSE)
 
-#Cross-validating the model with main effects:
+#The model with main effects:
 train_RMSE2 = NULL
 test_RMSE2 = NULL
 n = 1
 
 for (fold in folds) {
-  #train2 is everything but not fold, ! means all but not the following
+  #train2 is everything but not fold, in first loop fold 1, in second loop fold 2. ! means all but not the following
   train2 = subset(visualsearch, ! (ParticipantID %in% fold))
   #test2 is every other fold than the fold in train2
   test2 = subset(visualsearch, (ParticipantID %in% fold))
@@ -164,18 +158,19 @@ mean(test_RMSE2)
 mean(train_RMSE2)
 
 
+
 #Crossvalidating the simplest model
 train_RMSE3 = NULL
 test_RMSE3 = NULL
 n = 1
 
 for (fold in folds) {
-  #train3 is everything but not fold, ! means all but not the following
+  #train2 is everything but not fold, in first loop fold 1, in second loop fold 2. ! means all but not the following
   train3 = subset(visualsearch, ! (ParticipantID %in% fold))
-  #test3 is every other fold than the fold in train2
+  #test2 is every other fold than the fold in train2
   test3 = subset(visualsearch, (ParticipantID %in% fold))
   #The model we want to test
-  train_model3 = lmer(Duration ~ SearchType + (1 + Trial | ParticipantID), data = train3, REML = FALSE)
+  train_model3 = lmer(Duration ~ Trial + (1 + Trial | ParticipantID), data = train3, REML = FALSE)
   #Test the model on train data, seeing how well the model predicts train data
   train_RMSE3[n] = Metrics::rmse(train3$Duration, predict(train_model3, train3, allow.new.levels = TRUE))
   #Test the model on test data, seeing how well the model predicts test data - which is not a part of the model
@@ -188,54 +183,47 @@ mean(test_RMSE3)
 mean(train_RMSE3)
 
 
-#RUNNING THE MODELS
-model1 = lmer(Duration ~ SearchType * Trial + (1 + SearchType * Trial | ParticipantID), data = Fixation)
-summary(model1)
+#PUPILSIZE
+m1 = lmer(PupilSize ~ Ostensiveness * Orientation * ( TrialTime + TrialTime^2 + TrialTime^3) + 
+            GenderActor * ParticipantGender  * ( TrialTime + TrialTime^2 + TrialTime^3) + Trial + 
+            (1 + Ostensiveness + Orientation | ParticipantID), data = Sample)
 
-model2 = lmer(Duration ~ SearchType + Trial + (1 + SearchType + Trial | ParticipantID), data = Fixation)
-summary(model2)
-
-model3 = lmer(Duration ~ SearchType + (1  | ParticipantID), data = Fixation)
-summary(model3)
-
-```
-
-
-```{r setup, include=FALSE}
-#HEATMAPS
-#Loading the data
-Fixation=read.csv('Fixationsmerge.csv')
 library(jpeg)
 library(grid)
-#Defining the colours of the heatmap
+#Density
 jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
-#Choosing the picture. Change xxx in "ngxxxws.jpg" for new picture
-img <- readJPEG('eyetrackingscripts/Foraging/ng049ws.jpg')
+img <- readJPEG('eyetrackingscripts/Foraging/ng150ws.jpg')
 g <- rasterGrob(img, interpolate=TRUE)
 
-#Plotting the heatmap. Change Trial to match chosen picture above. Change ParticipantID if you want to 
-#examine another participant. 
-ggplot(subset(Fixation, Task == "VisualSearch" & ParticipantID == "3_1_f1" & Trial == 3), aes(x = PositionX, y = 1081-PositionY)) +
+
+ggplot(subset(Fixation, Task == "VisualSearch" & ParticipantID == "3_1_f1" & Trial == 8), aes(x = PositionX, y = 1081-PositionY)) +
   xlim(0,1920) +
   ylim(0,1080) +
   annotation_custom(g, xmin = -Inf, xmax = Inf, ymin = -0, ymax = 1080) + 
   stat_density2d(geom="raster", aes(fill=..density.., alpha=sqrt(sqrt(..density..))), contour = FALSE, n =1000) +
   scale_alpha(range=c(0.1,0.6)) + scale_fill_gradientn(colours = jet.colors(10), trans = "sqrt")
 
-#SCANPATHS
-#Choosing the picture. Change xxx in "ngxxxws.jpg" for new picture
-img1 <- readJPEG('eyetrackingscripts/Foraging/ng049ws.jpg')
+#Scanpath
+img1 <- readJPEG('eyetrackingscripts/Foraging/ng150ws.jpg')
 g1 <- rasterGrob(img1, interpolate=TRUE)
 
-#Plotting the scanpath. Change Trial to match chosen picture above. Change ParticipantID if you want to 
-#examine another participant. 
-x = subset(Fixation, Task == "VisualSearch" & ParticipantID == "3_1_f1" & Trial == 3)
+x = subset(Fixation, Task == "VisualSearch" & ParticipantID == "3_1_f1" & Trial == 8)
 x = x[order(x$Fixation),]
 ggplot(x, aes(x = PositionX, y = 1081-PositionY)) +
   annotation_custom(g1, xmin = -Inf, xmax = Inf, ymin = -0, ymax = 1080) +
   geom_point(size = x$Duration/100, alpha = 1, color = "cyan3") + 
   geom_path(size = 1, alpha = 0.3, color = "cyan") + 
   geom_text(aes(label = Fixation, size = 5), color = "gray100") 
-```
+  
+
+#Social engagement and gender, growth plots pupil size
+ggplot(subset(Sample, Task == "SocialEngagement"), aes(x = TrialTime, y = PupilSize, colour = Ostensiveness)) + 
+  geom_smooth() +
+  facet_grid(~Orientation) +
+  xlim(0,6000)
+
+
+
+
 
 
